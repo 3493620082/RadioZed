@@ -497,13 +497,13 @@ class App(tk.Tk):
             search = self.channel_search_var.get().strip().lower()
             if getattr(self.channel_search_entry, '_placeholder_active', True) is False:
                 search = ''
-            for ch in channels.findall('ChannelEntry'):
+            for i, ch in enumerate(channels.findall('ChannelEntry')):
                 name = ch.get('name', '')
                 cat = ch.get('cat', '')
                 cat_display = self.t('radio') if cat == 'Radio' else self.t('television')
                 display = f"{cat_display} - {name}"
                 if name and (not search or search in display.lower()):
-                    self.channel_list.insert('', tk.END, values=(display,))
+                    self.channel_list.insert('', tk.END, iid=str(i), values=(display,))
 
     def refresh_broadcast_list(self) -> None:
         for item in self.broadcast_list.get_children():
@@ -525,7 +525,7 @@ class App(tk.Tk):
         script = ch_entry.find('ScriptEntry')
         if script is None:
             return
-        for bcast in script.findall('BroadcastEntry'):
+        for i, bcast in enumerate(script.findall('BroadcastEntry')):
             ts = int(bcast.get('timestamp', '0'))
             es = int(bcast.get('endstamp', '0'))
             ts_day = ts // 1440
@@ -539,7 +539,7 @@ class App(tk.Tk):
             if getattr(self.broadcast_search_entry, '_placeholder_active', True) is False:
                 search = ''
             if not search or search in display.lower():
-                self.broadcast_list.insert('', tk.END, values=(display,))
+                self.broadcast_list.insert('', tk.END, iid=str(i), values=(display,))
 
     def _get_selected_bcast(self) -> ET.Element | None:
         ch_index = self._get_tree_index(self.channel_list)
@@ -577,7 +577,7 @@ class App(tk.Tk):
         except (FileNotFoundError, json.JSONDecodeError):
             cn_data = {}
 
-        for line in bcast.findall('LineEntry'):
+        for i, line in enumerate(bcast.findall('LineEntry')):
             r = int(line.get('r', '255'))
             g = int(line.get('g', '192'))
             b = int(line.get('b', '0'))
@@ -591,7 +591,7 @@ class App(tk.Tk):
                 continue
             tag = f'color_{r}_{g}_{b}'
             self.line_list.tag_configure(tag, foreground=f'#{r:02x}{g:02x}{b:02x}')
-            self.line_list.insert('', tk.END, values=(text, color_str, line_id), tags=(tag,))
+            self.line_list.insert('', tk.END, iid=str(i), values=(text, color_str, line_id), tags=(tag,))
 
     def add_line(self) -> None:
         bcast = self._get_selected_bcast()
@@ -829,19 +829,13 @@ class App(tk.Tk):
         bcast = self._get_selected_bcast()
         if bcast is None:
             return None
-        sel = self.line_list.selection()
-        if not sel:
-            return None
-        selected_iid = sel[0]
-        children = self.line_list.get_children()
-        try:
-            index = children.index(selected_iid)
-        except ValueError:
+        l_index = self._get_tree_index(self.line_list)
+        if l_index is None:
             return None
         lines = bcast.findall('LineEntry')
-        if index >= len(lines):
+        if l_index >= len(lines):
             return None
-        return lines[index]
+        return lines[l_index]
 
     def delete_channel(self) -> None:
         ch_index = self._get_tree_index(self.channel_list)
@@ -915,10 +909,9 @@ class App(tk.Tk):
         line_sel = self.line_list.selection()
         if not line_sel:
             return
-        children = self.line_list.get_children()
         try:
-            line_idx = children.index(line_sel[0])
-        except ValueError:
+            line_idx = int(line_sel[0])
+        except (ValueError, TypeError):
             return
         if line_idx >= len(lines):
             return
@@ -1469,10 +1462,9 @@ class App(tk.Tk):
         sel = tree.selection()
         if not sel:
             return None
-        children = tree.get_children()
         try:
-            return children.index(sel[0])
-        except ValueError:
+            return int(sel[0])
+        except (ValueError, TypeError):
             return None
 
     def show_page(self, name: str) -> None:
