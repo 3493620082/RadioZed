@@ -253,6 +253,12 @@ class App(tk.Tk):
         self.btn_batch_line = ttk.Button(btn_frame_lines, text=self.t('batch_add_line'),
                    command=self.batch_add_lines)
         self.btn_batch_line.pack(side=tk.LEFT, padx=(2, 0))
+        self.btn_copy_line = ttk.Button(btn_frame_lines, text=self.t('copy_line_data'),
+                   command=self.copy_line_data)
+        self.btn_copy_line.pack(side=tk.LEFT, padx=(2, 0))
+        self.btn_paste_line = ttk.Button(btn_frame_lines, text=self.t('paste_line_data'),
+                   command=self.paste_line_data)
+        self.btn_paste_line.pack(side=tk.LEFT, padx=(2, 0))
 
     def _build_translate_page(self) -> None:
         self.page_translate = ttk.Frame(self)
@@ -344,6 +350,8 @@ class App(tk.Tk):
         self.btn_edit_line.config(text=t('edit_line'))
         self.btn_delete_line.config(text=t('delete_line'))
         self.btn_batch_line.config(text=t('batch_add_line'))
+        self.btn_copy_line.config(text=t('copy_line_data'))
+        self.btn_paste_line.config(text=t('paste_line_data'))
         # Context menus
         self.ch_context.entryconfigure(0, label=t('edit'))
         self.bcast_context.entryconfigure(0, label=t('edit'))
@@ -950,6 +958,82 @@ class App(tk.Tk):
         if idx < len(values):
             self.clipboard_clear()
             self.clipboard_append(values[idx])
+
+    def copy_line_data(self) -> None:
+        sel = self.line_list.selection()
+        if not sel:
+            messagebox.showwarning(self.t('warning'), self.t('no_line_selected'))
+            return
+        values = self.line_list.item(sel[0], 'values')
+        if len(values) < 2:
+            return
+        text = values[0]
+        color_str = values[1]
+        parts = color_str.split(',')
+        r = int(parts[0].strip()) if len(parts) > 0 else 255
+        g = int(parts[1].strip()) if len(parts) > 1 else 192
+        b = int(parts[2].strip()) if len(parts) > 2 else 0
+        data = {'text': text, 'r': r, 'g': g, 'b': b}
+        self.clipboard_clear()
+        self.clipboard_append(str(data))
+
+    def paste_line_data(self) -> None:
+        if not self.file_path:
+            return
+        bcast = self._get_selected_bcast()
+        if bcast is None:
+            return
+        try:
+            clip_text = self.clipboard_get()
+        except Exception:
+            return
+        if not clip_text:
+            return
+        try:
+            data = eval(clip_text)
+        except Exception:
+            return
+        if not isinstance(data, dict):
+            return
+        text = data.get('text', '')
+        r = data.get('r', 255)
+        g = data.get('g', 192)
+        b = data.get('b', 0)
+        if not text:
+            return
+
+        tree = ET.parse(self.file_path)
+        root = tree.getroot()
+        channels = root.find('Channels')
+        if channels is None:
+            return
+        ch_index = self._get_tree_index(self.channel_list)
+        b_index = self._get_tree_index(self.broadcast_list)
+        if ch_index is None or b_index is None:
+            return
+        ch_entries = channels.findall('ChannelEntry')
+        if ch_index >= len(ch_entries):
+            return
+        script = ch_entries[ch_index].find('ScriptEntry')
+        if script is None:
+            return
+        bcasts = script.findall('BroadcastEntry')
+        if b_index >= len(bcasts):
+            return
+        bcast_el = bcasts[b_index]
+
+        line_id = str(uuid.uuid4())
+        ET.SubElement(bcast_el, 'LineEntry', {
+            'ID': line_id,
+            'r': str(r),
+            'g': str(g),
+            'b': str(b),
+        })
+
+        ET.indent(tree, space='  ')
+        tree.write(self.file_path, encoding='utf-8', xml_declaration=True)
+        self._sync_translate_all(line_id, text)
+        self.refresh_line_list()
 
     def edit_line(self) -> None:
         line_entry = self._get_selected_line()
