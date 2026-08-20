@@ -172,14 +172,14 @@ class App(tk.Tk):
 
         self.broadcast_search_var = tk.StringVar()
         self.broadcast_search_entry = ttk.Entry(channel_right, textvariable=self.broadcast_search_var)
-        self.broadcast_search_entry.grid(row=1, column=0, columnspan=2, sticky='ew', padx=4, pady=(0, 2))
+        self.broadcast_search_entry.grid(row=1, column=0, columnspan=3, sticky='ew', padx=4, pady=(0, 2))
         self.broadcast_search_entry.bind('<Return>', lambda e: self.refresh_broadcast_list())
         self._set_placeholder(self.broadcast_search_entry, self.t('search_placeholder'))
 
         self.broadcast_list = ttk.Treeview(channel_right, columns=('time',), show='headings')
         self.broadcast_list.heading('time', text=self.t('broadcast'))
         self.broadcast_list.column('time', width=180)
-        self.broadcast_list.grid(row=2, column=0, columnspan=2, sticky='nsew', padx=2, pady=2)
+        self.broadcast_list.grid(row=2, column=0, columnspan=3, sticky='nsew', padx=2, pady=2)
         self.broadcast_list.bind('<<TreeviewSelect>>', lambda e: self.refresh_line_list())
         self.broadcast_list.bind('<Double-1>', lambda e: self.edit_broadcast())
 
@@ -192,12 +192,17 @@ class App(tk.Tk):
                 self.bcast_context.tk_popup(event.x_root, event.y_root)
         self.broadcast_list.bind('<Button-3>', on_bcast_right_click)
 
-        self.btn_add_broadcast = ttk.Button(channel_right, text=self.t('add_broadcast'),
+        btn_frame_bcast = ttk.Frame(channel_right)
+        btn_frame_bcast.grid(row=3, column=0, columnspan=3, sticky=tk.W, padx=2, pady=2)
+        self.btn_add_broadcast = ttk.Button(btn_frame_bcast, text=self.t('add_broadcast'),
                    command=self.add_broadcast)
-        self.btn_add_broadcast.grid(row=3, column=0, sticky=tk.W, padx=2, pady=2)
-        self.btn_delete_broadcast = ttk.Button(channel_right, text=self.t('delete_broadcast'),
+        self.btn_add_broadcast.pack(side=tk.LEFT)
+        self.btn_batch_broadcast = ttk.Button(btn_frame_bcast, text=self.t('batch_add_broadcast'),
+                   command=self.batch_add_broadcasts)
+        self.btn_batch_broadcast.pack(side=tk.LEFT, padx=(2, 0))
+        self.btn_delete_broadcast = ttk.Button(btn_frame_bcast, text=self.t('delete_broadcast'),
                    style='Delete.TButton', command=self.delete_broadcast)
-        self.btn_delete_broadcast.grid(row=3, column=1, sticky=tk.W, padx=(0, 2), pady=2)
+        self.btn_delete_broadcast.pack(side=tk.LEFT, padx=(2, 0))
 
         # --- Right panel: All Lines ---
         channel_lines = ttk.Frame(self.page_channel)
@@ -342,6 +347,7 @@ class App(tk.Tk):
         self.broadcast_list.heading('time', text=t('broadcast'))
         self.btn_add_broadcast.config(text=t('add_broadcast'))
         self.btn_delete_broadcast.config(text=t('delete_broadcast'))
+        self.btn_batch_broadcast.config(text=t('batch_add_broadcast'))
         self.label_all_lines.config(text=t('all_lines'))
         self.line_list.heading('text', text=t('line'))
         self.line_list.heading('color', text=t('color'))
@@ -964,18 +970,20 @@ class App(tk.Tk):
         if not sel:
             messagebox.showwarning(self.t('warning'), self.t('no_line_selected'))
             return
-        values = self.line_list.item(sel[0], 'values')
-        if len(values) < 2:
-            return
-        text = values[0]
-        color_str = values[1]
-        parts = color_str.split(',')
-        r = int(parts[0].strip()) if len(parts) > 0 else 255
-        g = int(parts[1].strip()) if len(parts) > 1 else 192
-        b = int(parts[2].strip()) if len(parts) > 2 else 0
-        data = {'text': text, 'r': r, 'g': g, 'b': b}
+        items = []
+        for iid in sel:
+            values = self.line_list.item(iid, 'values')
+            if len(values) < 2:
+                continue
+            text = values[0]
+            color_str = values[1]
+            parts = color_str.split(',')
+            r = int(parts[0].strip()) if len(parts) > 0 else 255
+            g = int(parts[1].strip()) if len(parts) > 1 else 192
+            b = int(parts[2].strip()) if len(parts) > 2 else 0
+            items.append({'text': text, 'r': r, 'g': g, 'b': b})
         self.clipboard_clear()
-        self.clipboard_append(str(data))
+        self.clipboard_append(str(items))
 
     def paste_line_data(self) -> None:
         if not self.file_path:
@@ -993,13 +1001,11 @@ class App(tk.Tk):
             data = eval(clip_text)
         except Exception:
             return
-        if not isinstance(data, dict):
-            return
-        text = data.get('text', '')
-        r = data.get('r', 255)
-        g = data.get('g', 192)
-        b = data.get('b', 0)
-        if not text:
+        if isinstance(data, dict):
+            items = [data]
+        elif isinstance(data, list):
+            items = data
+        else:
             return
 
         tree = ET.parse(self.file_path)
@@ -1022,17 +1028,26 @@ class App(tk.Tk):
             return
         bcast_el = bcasts[b_index]
 
-        line_id = str(uuid.uuid4())
-        ET.SubElement(bcast_el, 'LineEntry', {
-            'ID': line_id,
-            'r': str(r),
-            'g': str(g),
-            'b': str(b),
-        })
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            text = item.get('text', '')
+            r = item.get('r', 255)
+            g = item.get('g', 192)
+            b = item.get('b', 0)
+            if not text:
+                continue
+            line_id = str(uuid.uuid4())
+            ET.SubElement(bcast_el, 'LineEntry', {
+                'ID': line_id,
+                'r': str(r),
+                'g': str(g),
+                'b': str(b),
+            })
+            self._sync_translate_all(line_id, text)
 
         ET.indent(tree, space='  ')
         tree.write(self.file_path, encoding='utf-8', xml_declaration=True)
-        self._sync_translate_all(line_id, text)
         self.refresh_line_list()
 
     def edit_line(self) -> None:
@@ -1250,6 +1265,101 @@ class App(tk.Tk):
 
         btn_frame = ttk.Frame(frame)
         btn_frame.grid(row=3, column=0, columnspan=2, pady=(12, 0))
+        ttk.Button(btn_frame, text=self.t('confirm'), command=on_confirm).pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_frame, text=self.t('cancel'), command=dialog.destroy).pack(side=tk.LEFT, padx=4)
+
+        dialog.update_idletasks()
+        w = dialog.winfo_width()
+        h = dialog.winfo_height()
+        x = self.winfo_x() + (self.winfo_width() - w) // 2
+        y = self.winfo_y() + (self.winfo_height() - h) // 2
+        dialog.geometry(f"+{x}+{y}")
+
+    def batch_add_broadcasts(self) -> None:
+        ch_index = self._get_tree_index(self.channel_list)
+        if ch_index is None:
+            return
+        tree = ET.parse(self.file_path)
+        root = tree.getroot()
+        channels = root.find('Channels')
+        if channels is None:
+            return
+        ch_entries = channels.findall('ChannelEntry')
+        if ch_index >= len(ch_entries):
+            return
+        ch_entry = ch_entries[ch_index]
+        script = ch_entry.find('ScriptEntry')
+        if script is None:
+            return
+
+        dialog = tk.Toplevel(self)
+        dialog.title(self.t('batch_add_broadcast_title'))
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.focus_force()
+
+        frame = ttk.Frame(dialog, padding=16)
+        frame.pack()
+
+        ttk.Label(frame, text=self.t('start_day')).pack(anchor=tk.W)
+        start_var = tk.StringVar(value='1')
+
+        def validate_int(P: str) -> bool:
+            if P == '':
+                return True
+            return P.isdigit() and int(P) >= 0
+        vcmd = (dialog.register(validate_int), '%P')
+        ttk.Entry(frame, textvariable=start_var, width=24,
+                  validate='key', validatecommand=vcmd).pack(fill=tk.X, pady=(2, 8))
+
+        ttk.Label(frame, text=self.t('end_day')).pack(anchor=tk.W)
+        end_var = tk.StringVar(value='1')
+        ttk.Entry(frame, textvariable=end_var, width=24,
+                  validate='key', validatecommand=vcmd).pack(fill=tk.X, pady=(2, 8))
+
+        ttk.Label(frame, text=self.t('interval_hours')).pack(anchor=tk.W)
+        interval_var = tk.StringVar(value='1')
+        interval_combo = ttk.Combobox(frame, textvariable=interval_var,
+                                      values=['1', '2', '3', '4', '6', '8', '12'],
+                                      state='readonly', width=22)
+        interval_combo.pack(fill=tk.X, pady=(2, 8))
+
+        def on_confirm() -> None:
+            s_str = start_var.get().strip()
+            e_str = end_var.get().strip()
+            if not s_str or not e_str:
+                return
+            start_day = int(s_str)
+            end_day = int(e_str)
+            interval = int(interval_var.get())
+
+            if start_day > end_day:
+                messagebox.showwarning(self.t('notice'), self.t('start_day_gt_end_day'))
+                return
+
+            for day in range(start_day, end_day + 1):
+                for hour in range(0, 24, interval):
+                    timestamp = day * 1440 + hour * 60
+                    endstamp = day * 1440 + (hour + interval) * 60
+                    bcast = ET.SubElement(script, 'BroadcastEntry', {
+                        'ID': str(uuid.uuid4()),
+                        'timestamp': str(timestamp),
+                        'endstamp': str(endstamp),
+                        'type': 'ActivateBroadcast',
+                        'day': str(day),
+                        'advertCat': 'none',
+                        'isSegment': 'false',
+                    })
+                    bcast.text = '\n'
+
+            ET.indent(tree, space='  ')
+            tree.write(self.file_path, encoding='utf-8', xml_declaration=True)
+            self.refresh_broadcast_list()
+            dialog.destroy()
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(pady=(12, 0))
         ttk.Button(btn_frame, text=self.t('confirm'), command=on_confirm).pack(side=tk.LEFT, padx=4)
         ttk.Button(btn_frame, text=self.t('cancel'), command=dialog.destroy).pack(side=tk.LEFT, padx=4)
 

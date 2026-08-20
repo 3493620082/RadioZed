@@ -1,5 +1,5 @@
 {
-    "version": "1.0.2",
+    "version": "1.0.3",
     "language": "CN",
     "lang_strings": {
         "CN": {
@@ -21,6 +21,12 @@
             "broadcast": "时段",
             "add_broadcast": "新增时段",
             "delete_broadcast": "删除时段",
+            "batch_add_broadcast": "批量新增",
+            "batch_add_broadcast_title": "批量新增时段",
+            "start_day": "起始日期(第几天)",
+            "end_day": "结束日期(第几天)",
+            "interval_hours": "间隔时间(小时)",
+            "start_day_gt_end_day": "起始天数不能大于结束天数",
             "all_lines": "所有台词(双击可编辑)",
             "line": "台词",
             "color": "颜色",
@@ -107,6 +113,12 @@
             "broadcast": "Broadcast",
             "add_broadcast": "Add Broadcast",
             "delete_broadcast": "Delete Broadcast",
+            "batch_add_broadcast": "Batch Add",
+            "batch_add_broadcast_title": "Batch Add Broadcasts",
+            "start_day": "Start Day (Day N)",
+            "end_day": "End Day (Day N)",
+            "interval_hours": "Interval (Hours)",
+            "start_day_gt_end_day": "Start day cannot be greater than end day",
             "all_lines": "All Lines (Double-click to edit)",
             "line": "Line",
             "color": "Color",
