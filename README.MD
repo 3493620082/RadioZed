@@ -1,6 +1,6 @@
 # RadioZed 电台制作工具
 
-> 用于 [Project Zomboid](https://store.steampowered.com/app/108600/Project_Zomboid/) 模组的电台数据编辑工具，支持频道、时段、台词的可视化管理与多语言翻译。
+> 用于 [Project Zomboid](https://store.steampowered.com/app/108600/Project_Zomboid/) 模组的电台数据编辑工具，支持频道、时段、台词的可视化管理与多语言翻译。 
 
 ## 功能特性
 

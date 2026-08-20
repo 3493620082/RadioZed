@@ -80,3 +80,4 @@ if __name__ == "__main__":
     copy_src()                 # 5. 复制src文件夹
     rename_exe()               # 6. 重命名app.exe为RadioZed.exe
     rename_dist()              # 7. 重命名dist为RadioZed v{version}
+    
