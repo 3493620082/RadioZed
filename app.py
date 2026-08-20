@@ -107,10 +107,16 @@ class App(tk.Tk):
                                         state='disabled')
         self.btn_translate.pack(side=tk.LEFT, padx=2, pady=2)
 
+        self.btn_server_translate = ttk.Button(self.subnavbar, text=self.t('server_translate'),
+                                               command=lambda: self.show_page('server_translate'),
+                                               state='disabled')
+        self.btn_server_translate.pack(side=tk.LEFT, padx=2, pady=2)
+
     def _build_pages(self) -> None:
         self._build_welcome_page()
         self._build_channel_page()
         self._build_translate_page()
+        self._build_server_translate_page()
 
     def _build_welcome_page(self) -> None:
         self.page_welcome = ttk.Frame(self)
@@ -324,6 +330,59 @@ class App(tk.Tk):
                                       command=self._open_lang_folder)
         self.lang_list.bind('<Button-3>', self._on_lang_right_click)
 
+    def _build_server_translate_page(self) -> None:
+        self.page_server_translate = ttk.Frame(self)
+        self.page_server_translate.rowconfigure(0, weight=1)
+        self.page_server_translate.columnconfigure(1, weight=1)
+
+        st_left = ttk.Frame(self.page_server_translate, width=200)
+        st_left.pack(side=tk.LEFT, fill=tk.Y)
+        st_left.pack_propagate(False)
+
+        self.label_st_all_languages = ttk.Label(st_left, text=self.t('all_languages'))
+        self.label_st_all_languages.pack(anchor=tk.W, padx=4, pady=2)
+
+        self.st_lang_list = ttk.Treeview(st_left, columns=('lang',), show='headings')
+        self.st_lang_list.heading('lang', text=self.t('language'))
+        self.st_lang_list.column('lang', width=180)
+        self.st_lang_list.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=2, pady=2)
+
+        self.label_st_only_cn_en = ttk.Button(st_left, text=self.t('st_only_cn_en'),
+                                               state='disabled')
+        self.label_st_only_cn_en.pack(side=tk.BOTTOM, anchor=tk.W, padx=2, pady=2)
+
+        st_right = ttk.Frame(self.page_server_translate)
+        st_right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        st_right.rowconfigure(2, weight=1)
+        st_right.columnconfigure(0, weight=1)
+
+        self.label_st_all_texts = ttk.Label(st_right, text=self.t('all_texts'))
+        self.label_st_all_texts.grid(row=0, column=0, sticky=tk.W, padx=4, pady=2)
+
+        self.st_search_var = tk.StringVar()
+        self.st_search_entry = ttk.Entry(st_right, textvariable=self.st_search_var)
+        self.st_search_entry.grid(row=1, column=0, sticky='ew', padx=4, pady=(0, 2))
+        self.st_search_entry.bind('<Return>', lambda e: self._load_st_translate_data())
+        self._set_placeholder(self.st_search_entry, self.t('search_placeholder'))
+
+        self.st_translate_tree = ttk.Treeview(st_right, columns=('key', 'val'), show='headings')
+        self.st_translate_tree.heading('key', text=self.t('id'))
+        self.st_translate_tree.heading('val', text=self.t('text'))
+        self.st_translate_tree.column('key', width=300)
+        self.st_translate_tree.column('val', width=400)
+        self.st_translate_tree.grid(row=2, column=0, sticky='nsew', padx=2, pady=2)
+
+        btn_frame_st = ttk.Frame(st_right)
+        btn_frame_st.grid(row=3, column=0, sticky=tk.W, padx=2, pady=2)
+        self.btn_st_edit_text = ttk.Button(btn_frame_st, text=self.t('sync_current_lang'),
+                   command=self._sync_st_language)
+        self.btn_st_edit_text.pack(side=tk.LEFT)
+        self.btn_st_open_folder = ttk.Button(btn_frame_st, text=self.t('open_file_location'),
+                   command=self._open_st_lang_folder)
+        self.btn_st_open_folder.pack(side=tk.LEFT, padx=(2, 0))
+
+        self.st_lang_list.bind('<<TreeviewSelect>>', lambda e: self._load_st_translate_data())
+
     def refresh_ui_text(self) -> None:
         t = self.t
         self.title(t('app_title'))
@@ -336,6 +395,7 @@ class App(tk.Tk):
         # Subnavbar
         self.btn_channel.config(text=t('channel'))
         self.btn_translate.config(text=t('translate'))
+        self.btn_server_translate.config(text=t('server_translate'))
         # Welcome
         self.label_welcome.config(text=t('please_open_file_first'))
         # Channel page
@@ -375,9 +435,19 @@ class App(tk.Tk):
         self.translate_tree.heading('val', text=t('text'))
         self.btn_edit_text.config(text=t('edit_text'))
         self.lang_context.entryconfigure(0, label=t('open_file_location'))
+        # Server translate page
+        self.label_st_all_languages.config(text=t('all_languages'))
+        self.st_lang_list.heading('lang', text=t('language'))
+        self.label_st_all_texts.config(text=t('all_texts'))
+        self.st_translate_tree.heading('key', text=t('id'))
+        self.st_translate_tree.heading('val', text=t('text'))
+        self.btn_st_edit_text.config(text=t('sync_current_lang'))
+        self.btn_st_open_folder.config(text=t('open_file_location'))
+        self.label_st_only_cn_en.config(text=t('st_only_cn_en'))
         # Search placeholders
         for entry_attr in ('channel_search_entry', 'broadcast_search_entry',
-                           'line_search_entry', 'translate_search_entry'):
+                           'line_search_entry', 'translate_search_entry',
+                           'st_search_entry'):
             entry = getattr(self, entry_attr, None)
             if entry is not None and hasattr(entry, '_placeholder'):
                 entry._placeholder = t('search_placeholder')
@@ -422,9 +492,27 @@ class App(tk.Tk):
             with open(json_path, 'w', encoding='utf-8') as f:
                 f.write('{}')
 
+        # Create ServerTranslate folder and copy src translation files
+        st_dir = os.path.join(project_dir, 'ServerTranslate')
+        st_cn_dir = os.path.join(st_dir, 'CN')
+        st_en_dir = os.path.join(st_dir, 'EN')
+        os.makedirs(st_cn_dir, exist_ok=True)
+        os.makedirs(st_en_dir, exist_ok=True)
+        src_dir = os.path.join(_base_dir(), 'src')
+        st_src_map = {
+            st_cn_dir: 'Server_RadioData_CN.json',
+            st_en_dir: 'Server_RadioData_EN.json',
+        }
+        for dst_dir, src_filename in st_src_map.items():
+            src_path = os.path.join(src_dir, src_filename)
+            dst_path = os.path.join(dst_dir, 'RadioData.json')
+            if os.path.isfile(src_path):
+                shutil.copy2(src_path, dst_path)
+
         self.file_path = xml_path
         self.btn_channel.config(state='normal')
         self.btn_translate.config(state='normal')
+        self.btn_server_translate.config(state='normal')
         self.update_title()
         self.refresh_channel_list()
         self.show_page('channel')
@@ -438,6 +526,7 @@ class App(tk.Tk):
             self.file_path = path
             self.btn_channel.config(state='normal')
             self.btn_translate.config(state='normal')
+            self.btn_server_translate.config(state='normal')
             self.update_title()
             self.refresh_channel_list()
             self.show_page('channel')
@@ -1665,6 +1754,7 @@ class App(tk.Tk):
         self.page_welcome.pack_forget()
         self.page_channel.pack_forget()
         self.page_translate.pack_forget()
+        self.page_server_translate.pack_forget()
 
         if name == 'welcome':
             self.page_welcome.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -1673,6 +1763,10 @@ class App(tk.Tk):
         elif name == 'translate':
             self.page_translate.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
             self.refresh_lang_list()
+        elif name == 'server_translate':
+            self.page_server_translate.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+            self._refresh_st_lang_list()
+            messagebox.showinfo(self.t('st_info_title'), self.t('st_info_text'))
 
     def checkOutputDir(self):
         current_dir = _base_dir()
@@ -1872,6 +1966,146 @@ class App(tk.Tk):
         x = self.winfo_x() + (self.winfo_width() - w) // 2
         y = self.winfo_y() + (self.winfo_height() - h) // 2
         dialog.geometry(f"+{x}+{y}")
+
+    def _refresh_st_lang_list(self) -> None:
+        for item in self.st_lang_list.get_children():
+            self.st_lang_list.delete(item)
+        if not self.file_path:
+            return
+        project_dir = os.path.dirname(self.file_path)
+        st_dir = os.path.join(project_dir, 'ServerTranslate')
+        if not os.path.isdir(st_dir):
+            return
+        for lang in os.listdir(st_dir):
+            json_file = os.path.join(st_dir, lang, 'RadioData.json')
+            if os.path.isdir(os.path.join(st_dir, lang)) and os.path.isfile(json_file):
+                self.st_lang_list.insert('', tk.END, values=(lang,))
+
+    def _load_st_translate_data(self) -> None:
+        for item in self.st_translate_tree.get_children():
+            self.st_translate_tree.delete(item)
+        sel = self.st_lang_list.selection()
+        if not sel or not self.file_path:
+            return
+        lang = self.st_lang_list.item(sel[0], 'values')[0]
+        project_dir = os.path.dirname(self.file_path)
+        json_path = os.path.join(project_dir, 'ServerTranslate', lang, 'RadioData.json')
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return
+        for key, val in data.items():
+            search = self.st_search_var.get().strip().lower()
+            if getattr(self.st_search_entry, '_placeholder_active', True) is False:
+                search = ''
+            if search and search not in key.lower() and search not in str(val).lower():
+                continue
+            self.st_translate_tree.insert('', tk.END, values=(key, val))
+
+    def _edit_st_translate_entry(self, event: tk.Event | None = None) -> None:
+        sel = self.st_translate_tree.selection()
+        if not sel:
+            return
+        values = self.st_translate_tree.item(sel[0], 'values')
+        if not values:
+            return
+        key, val = values[0], values[1]
+
+        sel = self.st_lang_list.selection()
+        if not sel:
+            return
+        lang = self.st_lang_list.item(sel[0], 'values')[0]
+
+        dialog = tk.Toplevel(self)
+        dialog.title(self.t('edit_translate_title'))
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.focus_force()
+
+        frame = ttk.Frame(dialog, padding=16)
+        frame.pack()
+
+        ttk.Label(frame, text=self.t('id_label')).pack(anchor=tk.W)
+        id_entry = ttk.Entry(frame, width=50)
+        id_entry.insert(0, key)
+        id_entry.config(state='readonly')
+        id_entry.pack(fill=tk.X, pady=(2, 8))
+
+        ttk.Label(frame, text=self.t('text_label')).pack(anchor=tk.W)
+        text_var = tk.StringVar(value=val)
+        ttk.Entry(frame, textvariable=text_var, width=50).pack(fill=tk.X, pady=(2, 8))
+
+        def on_confirm() -> None:
+            project_dir = os.path.dirname(self.file_path)
+            json_path = os.path.join(project_dir, 'ServerTranslate', lang, 'RadioData.json')
+            try:
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                data = {}
+            data[key] = text_var.get()
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+            self._load_st_translate_data()
+            dialog.destroy()
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(pady=(12, 0))
+        ttk.Button(btn_frame, text=self.t('confirm'), command=on_confirm).pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_frame, text=self.t('cancel'), command=dialog.destroy).pack(side=tk.LEFT, padx=4)
+
+        dialog.update_idletasks()
+        w = dialog.winfo_width()
+        h = dialog.winfo_height()
+        x = self.winfo_x() + (self.winfo_width() - w) // 2
+        y = self.winfo_y() + (self.winfo_height() - h) // 2
+        dialog.geometry(f"+{x}+{y}")
+
+    def _sync_st_language(self) -> None:
+        sel = self.st_lang_list.selection()
+        if not sel:
+            messagebox.showwarning(self.t('warning'), self.t('no_lang_selected'))
+            return
+        lang = self.st_lang_list.item(sel[0], 'values')[0]
+        project_dir = os.path.dirname(self.file_path)
+
+        # Read source translations from Translate/{lang}/RadioData.json
+        src_path = os.path.join(project_dir, 'Translate', lang, 'RadioData.json')
+        try:
+            with open(src_path, 'r', encoding='utf-8') as f:
+                src_data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            src_data = {}
+
+        # Read target server translations from ServerTranslate/{lang}/RadioData.json
+        dst_path = os.path.join(project_dir, 'ServerTranslate', lang, 'RadioData.json')
+        try:
+            with open(dst_path, 'r', encoding='utf-8') as f:
+                dst_data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            dst_data = {}
+
+        # Append all source entries to server translate file
+        for key, val in src_data.items():
+            dst_data[key] = val
+
+        with open(dst_path, 'w', encoding='utf-8') as f:
+            json.dump(dst_data, f, ensure_ascii=False, indent=4)
+
+        self._load_st_translate_data()
+        messagebox.showinfo(self.t('notice'), self.t('sync_success'))
+
+    def _open_st_lang_folder(self) -> None:
+        sel = self.st_lang_list.selection()
+        if not sel or not self.file_path:
+            return
+        lang = self.st_lang_list.item(sel[0], 'values')[0]
+        project_dir = os.path.dirname(self.file_path)
+        lang_dir = os.path.join(project_dir, 'ServerTranslate', lang)
+        if os.path.isdir(lang_dir):
+            os.startfile(lang_dir)
 
 if __name__ == '__main__':
     app = App()
