@@ -1585,8 +1585,8 @@ class App(tk.Tk):
             else:
                 freq_combo['values'] = [f"{f/10:.1f}" for f in range(880, 1081, 2)]
                 freq_combo.current(0)
-            update_freq_values()
-            cat_var.trace('w', update_freq_values)
+        update_freq_values()
+        cat_var.trace('w', update_freq_values)
 
         ttk.Combobox(frame, textvariable=cat_var, values=[self.t('radio'), self.t('television')],
                      state="readonly", width=22).grid(row=1, column=1, pady=4, padx=(8, 0))
